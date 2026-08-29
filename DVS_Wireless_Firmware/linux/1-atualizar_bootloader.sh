@@ -51,29 +51,52 @@ echo "ANTES DE CONTINUAR:"
 echo "  1. Conecte o TX via cabo USB direto no computador"
 echo "  2. De um duplo-toque RAPIDO no botao de reset"
 echo "  3. Confirme que apareceu \"NICENANO\" no gerenciador de arquivos"
-echo "  4. Anote a porta serial listada abaixo:"
 echo ""
-echo "Portas seriais detectadas:"
+read -p "Feito? Aperte ENTER para procurar a porta..."
+echo ""
+
 OS_TYPE="$(uname -s)"
-if [ "$OS_TYPE" = "Darwin" ]; then
-    PORTAS=$(ls /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* /dev/cu.usbserial* 2>/dev/null || true)
-else
-    PORTAS=$(ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || true)
-fi
-if [ -z "$PORTAS" ]; then
-    echo "  Nenhuma porta serial encontrada."
-    if [ "$OS_TYPE" = "Linux" ]; then
-        echo "  Se a placa aparece mas sem permissao, rode:"
-        echo "    sudo usermod -aG dialout \$USER"
-        echo "  Depois faca logout e login novamente."
+detectar_portas() {
+    if [ "$OS_TYPE" = "Darwin" ]; then
+        ls /dev/cu.usbmodem* /dev/cu.SLAB_USBtoUART* /dev/cu.usbserial* 2>/dev/null || true
+    else
+        ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null || true
     fi
-    read -p "Pressione ENTER para sair..."
-    exit 1
+}
+
+echo "Procurando porta serial..."
+PORTAS_ENCONTRADAS=($(detectar_portas))
+PORTA=""
+
+if [ ${#PORTAS_ENCONTRADAS[@]} -eq 0 ]; then
+    echo "Nenhuma porta serial encontrada."
+    if [ "$OS_TYPE" = "Linux" ]; then
+        echo "Se a placa aparece mas sem permissao, rode:"
+        echo "  sudo usermod -aG dialout \$USER"
+        echo "Depois faca logout e login novamente."
+    fi
+    read -p "Digite a porta manualmente (ex: /dev/ttyACM0 ou /dev/cu.usbmodemXXXX): " PORTA
+    [ -z "$PORTA" ] && echo "ERRO: nenhuma porta." && exit 1
+elif [ ${#PORTAS_ENCONTRADAS[@]} -eq 1 ]; then
+    PORTA="${PORTAS_ENCONTRADAS[0]}"
+    echo "Porta detectada automaticamente: $PORTA"
+else
+    echo "Multiplas portas encontradas:"
+    i=1
+    for p in "${PORTAS_ENCONTRADAS[@]}"; do
+        echo "  $i) $p"
+        i=$((i+1))
+    done
+    read -p "Escolha o numero da porta: " ESCOLHA
+    if [[ "$ESCOLHA" =~ ^[0-9]+$ ]] && [ "$ESCOLHA" -ge 1 ] && [ "$ESCOLHA" -le ${#PORTAS_ENCONTRADAS[@]} ]; then
+        PORTA="${PORTAS_ENCONTRADAS[$((ESCOLHA-1))]}"
+    else
+        echo "ERRO: escolha invalida."
+        exit 1
+    fi
 fi
-echo "$PORTAS" | while read -r p; do echo "  - $p"; done
-echo ""
-read -p "Digite o caminho completo da porta (ex: /dev/ttyACM0 ou /dev/cu.usbmodem1101): " PORTA
-if [ -z "$PORTA" ] || [ ! -e "$PORTA" ]; then
+
+if [ ! -e "$PORTA" ]; then
     echo "ERRO: porta invalida."
     read -p "Pressione ENTER para sair..."
     exit 1

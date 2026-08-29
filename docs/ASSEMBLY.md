@@ -56,27 +56,21 @@ Este projeto disponibiliza uma pasta `DVS_Wireless_Firmware/windows/` com os **b
 3. Dê duplo-clique em `gravar_firmware_tx.bat` e siga as instruções na tela — o script detecta a unidade `NICENANO` automaticamente e copia o firmware `.uf2` para ela.
 4. Esse mesmo processo **também atualiza o bootloader do TX**, já que a pasta de firmware inclui os arquivos necessários para isso.
 
-### Gravando via Linux ou macOS (script único, testado e funcional nos dois sistemas)
+### Gravando via Linux ou macOS (testado e funcional nos dois sistemas)
 
-Assim como no Windows, existe uma pasta com **binários já compilados** (`DVS_Wireless_Firmware/mac_linux/`) e scripts prontos — um **único conjunto de scripts que detecta automaticamente se está rodando em macOS ou Linux** e ajusta o comportamento (portas seriais, detecção de unidade) de acordo.
+Existem duas pastas com **binários já compilados** e scripts prontos, uma para cada sistema:
+- `DVS_Wireless_Firmware/linux/` — scripts `.sh`, rodados pelo terminal
+- `DVS_Wireless_Firmware/mac/` — scripts `.command`, prontos para **duplo-clique direto no Finder**, sem precisar converter nada manualmente
 
-> **Status por sistema operacional**: o processo abaixo foi **testado e confirmado funcional tanto em Linux quanto em macOS**.
+O conteúdo dos scripts é idêntico entre as duas pastas (cada script já detecta sozinho se está rodando em Linux ou macOS e ajusta portas seriais/detecção de unidade automaticamente) — a única diferença é a extensão do arquivo, para funcionar com o clique duplo em cada sistema.
 
-**Dica para macOS**: se o script avisar "adafruit-nrfutil nao encontrado" mesmo depois de instalado, é porque o `pip install --user` no macOS instala o executável em `~/Library/Python/3.9/bin` (ou versão equivalente do seu Python), que não fica no PATH por padrão. Resolva rodando:
-```bash
-echo 'export PATH="$HOME/Library/Python/3.9/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-(ajuste "3.9" para a versão do seu Python, visível no início da saída do script)
+> **Status por sistema operacional**: testado e confirmado funcional tanto em Linux quanto em macOS, incluindo a detecção automática de porta serial.
 
-**Rodando com um clique (macOS)**: os arquivos `.sh` podem ser convertidos em `.command` para rodar com duplo-clique no Finder, em vez de precisar do Terminal:
-```bash
-cp 2-gravar_firmware_rx.sh 2-gravar_firmware_rx.command
-cp 3-gravar_firmware_tx.sh 3-gravar_firmware_tx.command
-cp 1-atualizar_bootloader.sh 1-atualizar_bootloader.command
-chmod +x *.command
-```
-Na primeira vez que abrir cada `.command`, o macOS deve bloquear com um aviso de segurança — vá em **Preferências do Sistema → Privacidade e Segurança**, role até a seção de segurança e clique em **"Abrir Mesmo Assim"** ao lado do aviso correspondente.
+**Detecção automática de porta**: os três scripts agora detectam a porta serial sozinhos. Se só existir uma porta candidata conectada, o script já usa ela direto, sem perguntar nada. Se houver mais de uma, aparece uma lista numerada para você escolher (`1) /dev/ttyACM0`, `2) /dev/ttyACM1`, etc.) — só digite o número. Só é preciso digitar o caminho manualmente se nenhuma porta for detectada.
+
+**macOS — primeira execução de um `.command`**: o Gatekeeper do macOS bloqueia a primeira execução de qualquer script baixado da internet. Se aparecer um aviso ("não foi possível verificar..."), clique em **"OK"** (não em "Mover para o Lixo"), depois vá em **Preferências do Sistema (ou Ajustes do Sistema) → Privacidade e Segurança**, role até a seção de segurança, e clique em **"Abrir Mesmo Assim"** ao lado do aviso referente ao script. Depois disso, o duplo-clique funciona normalmente.
+
+**macOS — dica sobre `adafruit-nrfutil`**: se o script de bootloader avisar "adafruit-nrfutil nao encontrado" mesmo depois de instalado, é porque o `pip install --user` no macOS instala o executável em `~/Library/Python/<versão>/bin`, que não fica no PATH por padrão. O próprio script mostra o comando exato para corrigir isso quando detecta o problema.
 
 **Pré-requisito**: Python 3 instalado (`sudo apt install python3 python3-pip` no Ubuntu/Mint/Debian, `sudo dnf install python3 python3-pip` no Fedora, `brew install python3` no macOS). Assim como no Windows, o script **não instala o Python automaticamente** — se não encontrar, ele avisa e para. A biblioteca `esptool` **é instalada automaticamente** via pip, se ainda não estiver presente.
 
@@ -85,18 +79,18 @@ Na primeira vez que abrir cada `.command`, o macOS deve bloquear com um aviso de
 Placas nice!nano novas de fábrica costumam vir com o bootloader **desatualizado**, o que impede a gravação normal do firmware. **Antes de gravar o firmware do TX pela primeira vez numa placa nova, é necessário atualizar o bootloader** com este script. Esse mesmo script também serve para recuperação, caso o firmware do TX trave/corrompa depois de já configurado.
 
 1. Conecte o TX, dê duplo-toque rápido no botão de reset para entrar em modo bootloader.
-2. Rode `./1-atualizar_bootloader.sh` e siga as instruções — o script instala `adafruit-nrfutil` automaticamente se necessário, detecta a porta serial, e pede confirmação antes de prosseguir (é uma operação sensível — **não desconecte o cabo USB durante o processo**).
+2. No Linux, rode `./1-atualizar_bootloader.sh` no terminal; no macOS, dê duplo-clique em `1-atualizar_bootloader.command`. Siga as instruções — o script instala `adafruit-nrfutil` automaticamente se necessário, detecta a porta serial, e pede confirmação antes de prosseguir (é uma operação sensível — **não desconecte o cabo USB durante o processo**).
 3. Depois de concluído com sucesso, a placa está pronta para receber o firmware normalmente (passo 3 abaixo).
 
 **Passo 2 — Gravando o RX** (`2-gravar_firmware_rx.sh`):
 1. Conecte o ESP32-S3 (RX) via USB.
-2. Rode `./2-gravar_firmware_rx.sh` no terminal.
+2. No Linux, rode `./2-gravar_firmware_rx.sh` no terminal; no macOS, dê duplo-clique em `2-gravar_firmware_rx.command`.
 3. O script detecta automaticamente a porta serial (tenta `/dev/ttyACM*`/`/dev/ttyUSB*` no Linux, `/dev/cu.usbmodem*`/`/dev/cu.SLAB_USBtoUART*`/`/dev/cu.usbserial*` no macOS) e pergunta se deseja usá-la — ou permite digitar manualmente.
 4. Aguarde a gravação automática do bootloader, tabela de partições e firmware principal.
 
 **Passo 3 — Gravando o TX** (`3-gravar_firmware_tx.sh`):
 1. Conecte o TX via USB e dê duplo-toque rápido no botão de reset para entrar em modo bootloader.
-2. Rode `./3-gravar_firmware_tx.sh` e siga as instruções — o script procura a unidade `NICENANO` automaticamente (via `diskutil` no macOS, via `/media`, `/run/media` ou `lsblk` no Linux) e copia o firmware.
+2. No Linux, rode `./3-gravar_firmware_tx.sh` no terminal; no macOS, dê duplo-clique em `3-gravar_firmware_tx.command`. Siga as instruções — o script procura a unidade `NICENANO` automaticamente (via `diskutil` no macOS, via `/media`, `/run/media` ou `lsblk` no Linux) e copia o firmware.
 
 Em ambos os sistemas, se aparecer erro de permissão na porta serial no Linux, rode `sudo usermod -aG dialout $USER`, faça logout e login novamente.
 
