@@ -80,17 +80,17 @@ Placas nice!nano novas de fábrica costumam vir com o bootloader **desatualizado
 
 1. Conecte o TX, dê duplo-toque rápido no botão de reset para entrar em modo bootloader.
 2. No Linux, rode `./1-atualizar_bootloader.sh` no terminal; no macOS, dê duplo-clique em `1-atualizar_bootloader.command`. Siga as instruções — o script instala `adafruit-nrfutil` automaticamente se necessário, detecta a porta serial, e pede confirmação antes de prosseguir (é uma operação sensível — **não desconecte o cabo USB durante o processo**).
-3. Depois de concluído com sucesso, a placa está pronta para receber o firmware normalmente (passo 3 abaixo).
+3. Depois de concluído com sucesso, a placa está pronta para receber o firmware normalmente (passo 2 abaixo).
 
-**Passo 2 — Gravando o RX** (`2-gravar_firmware_rx.sh`):
-1. Conecte o ESP32-S3 (RX) via USB.
-2. No Linux, rode `./2-gravar_firmware_rx.sh` no terminal; no macOS, dê duplo-clique em `2-gravar_firmware_rx.command`.
-3. O script detecta automaticamente a porta serial (tenta `/dev/ttyACM*`/`/dev/ttyUSB*` no Linux, `/dev/cu.usbmodem*`/`/dev/cu.SLAB_USBtoUART*`/`/dev/cu.usbserial*` no macOS) e pergunta se deseja usá-la — ou permite digitar manualmente.
-4. Aguarde a gravação automática do bootloader, tabela de partições e firmware principal.
-
-**Passo 3 — Gravando o TX** (`3-gravar_firmware_tx.sh`):
+**Passo 2 — Gravando o TX** (`2-gravar_firmware_tx.sh`):
 1. Conecte o TX via USB e dê duplo-toque rápido no botão de reset para entrar em modo bootloader.
-2. No Linux, rode `./3-gravar_firmware_tx.sh` no terminal; no macOS, dê duplo-clique em `3-gravar_firmware_tx.command`. Siga as instruções — o script procura a unidade `NICENANO` automaticamente (via `diskutil` no macOS, via `/media`, `/run/media` ou `lsblk` no Linux) e copia o firmware.
+2. No Linux, rode `./2-gravar_firmware_tx.sh` no terminal; no macOS, dê duplo-clique em `2-gravar_firmware_tx.command`. Siga as instruções — o script procura a unidade `NICENANO` automaticamente (via `diskutil` no macOS, via `/media`, `/run/media` ou `lsblk` no Linux) e copia o firmware.
+
+**Passo 3 — Gravando o RX** (`3-gravar_firmware_rx.sh`):
+1. Conecte o ESP32-S3 (RX) via USB.
+2. No Linux, rode `./3-gravar_firmware_rx.sh` no terminal; no macOS, dê duplo-clique em `3-gravar_firmware_rx.command`.
+3. O script detecta automaticamente a porta serial (tenta `/dev/ttyACM*`/`/dev/ttyUSB*` no Linux, `/dev/cu.usbmodem*`/`/dev/cu.SLAB_USBtoUART*`/`/dev/cu.usbserial*` no macOS) — se houver apenas uma porta candidata, usa direto; se houver várias, mostra uma lista numerada para escolher.
+4. Aguarde a gravação automática do bootloader, tabela de partições e firmware principal.
 
 Em ambos os sistemas, se aparecer erro de permissão na porta serial no Linux, rode `sudo usermod -aG dialout $USER`, faça logout e login novamente.
 
