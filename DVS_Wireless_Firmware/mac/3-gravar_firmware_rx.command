@@ -29,18 +29,26 @@ echo "Python: $($PYTHON --version 2>&1)"
 
 if ! $PYTHON -m esptool --version &>/dev/null 2>&1; then
     echo "Instalando esptool..."
-    if ! $PYTHON -m pip install --user esptool 2>/tmp/dvs_pip_err.log; then
-        if grep -q "externally-managed-environment" /tmp/dvs_pip_err.log; then
-            echo "Ambiente Python gerenciado pelo sistema (PEP 668) - tentando com --break-system-packages..."
-            $PYTHON -m pip install --user --break-system-packages esptool
-        else
-            cat /tmp/dvs_pip_err.log
-            echo "ERRO ao instalar esptool."
-            read -p "Pressione ENTER para sair..."
-            exit 1
+    if $PYTHON -c "import sys; exit(0 if sys.prefix != sys.base_prefix else 1)" 2>/dev/null; then
+        # Dentro de um ambiente virtual (detectado via sys.prefix, mais
+        # confiavel que $VIRTUAL_ENV - o export.sh do ESP-IDF nao define
+        # essa variavel, mas ainda assim ativa um venv de verdade) -
+        # "--user" e' proibido aqui, instala normal no proprio venv.
+        $PYTHON -m pip install esptool
+    else
+        if ! $PYTHON -m pip install --user esptool 2>/tmp/dvs_pip_err.log; then
+            if grep -q "externally-managed-environment" /tmp/dvs_pip_err.log; then
+                echo "Ambiente Python gerenciado pelo sistema (PEP 668) - tentando com --break-system-packages..."
+                $PYTHON -m pip install --user --break-system-packages esptool
+            else
+                cat /tmp/dvs_pip_err.log
+                echo "ERRO ao instalar esptool."
+                read -p "Pressione ENTER para sair..."
+                exit 1
+            fi
         fi
+        rm -f /tmp/dvs_pip_err.log
     fi
-    rm -f /tmp/dvs_pip_err.log
 fi
 echo "esptool: OK"
 echo ""

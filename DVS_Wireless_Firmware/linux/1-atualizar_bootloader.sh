@@ -18,7 +18,20 @@ echo "OK: Python -> $(python3 --version 2>&1)"
 echo ""
 if ! command -v adafruit-nrfutil &> /dev/null; then
     echo "AVISO: adafruit-nrfutil nao encontrado. Instalando..."
-    pip3 install --user adafruit-nrfutil
+    if python3 -c "import sys; exit(0 if sys.prefix != sys.base_prefix else 1)" 2>/dev/null; then
+        # Dentro de um ambiente virtual (detectado via sys.prefix)
+        pip3 install adafruit-nrfutil
+    else
+        if ! pip3 install --user adafruit-nrfutil 2>/tmp/dvs_pip_err.log; then
+            if grep -q "externally-managed-environment" /tmp/dvs_pip_err.log; then
+                echo "Ambiente Python gerenciado pelo sistema (PEP 668) - tentando com --break-system-packages..."
+                pip3 install --user --break-system-packages adafruit-nrfutil
+            else
+                cat /tmp/dvs_pip_err.log
+            fi
+        fi
+        rm -f /tmp/dvs_pip_err.log
+    fi
     if ! command -v adafruit-nrfutil &> /dev/null; then
         echo ""
         echo "AVISO: comando ainda nao encontrado no PATH."
