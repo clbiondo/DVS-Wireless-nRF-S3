@@ -19,6 +19,7 @@ Este projeto é baseado no trabalho original de [Felipe Alme](https://github.com
   - MixVibes V2 (1300Hz, 270°)
   - Pioneer Rekordbox DVS (1000Hz, 90°)
 - **Pareamento sem fio** entre TX e RX por canal e endereço de rádio configuráveis, sem necessidade de reflashar firmware — basta segurar o botão do dock por 3 segundos.
+- **Baixo consumo de energia no TX** — com uma bateria de 50mAh, a autonomia é de aproximadamente 5 horas de uso contínuo.
 - **Troca de formato de timecode com um toque rápido** no mesmo botão — útil para trocar de software de DJ sem precisar mexer em configuração nenhuma.
 - **Indicação visual por LED** de status de pareamento e do formato de timecode selecionado. _(O comportamento exato do LED em relação a força de sinal/perda de pacotes ainda não está confirmado nesta versão — ver observação na seção de hardware.)_
 
