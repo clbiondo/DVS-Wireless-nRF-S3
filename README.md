@@ -37,6 +37,7 @@ Este projeto é baseado no trabalho original de [Felipe Alme](https://github.com
 
   _(O flash de cor do formato dura ~800ms após o toque rápido no botão, voltando em seguida ao estado de repouso.)_
 - **Um único firmware de TX** para qualquer disco — não é necessário compilar/gravar firmware diferente por deck; o pareamento grava a identidade (canal + endereço) na memória não-volátil do próprio TX.
+- **Despertar automático ao encaixar no dock** — o TX entra em modo de baixíssimo consumo quando removido do dock, e acorda sozinho, sem precisar de botão de ligar, assim que é encaixado de volta.
 
 ---
 
@@ -78,11 +79,20 @@ Com o TX pareado e encaixado no prato, é só ligar o toca-discos e o software d
 ## Estrutura deste repositório
 
 ```
-/firmware/rx/       — Firmware do receptor (ESP32-S3, ESP-IDF)
-/firmware/tx/        — Firmware do transmissor (nRF52840, Zephyr/NCS)
-/hardware/           — Esquemas elétricos e diagramas de ligação
-/docs/               — Instruções de montagem e este manual
+/firmware/rx/                — Código-fonte do receptor (ESP32-S3, ESP-IDF) — não compilado
+/firmware/tx/                — Código-fonte do transmissor (nRF52840, Zephyr/NCS) — não compilado
+/DVS_Wireless_Firmware/      — Binários já compilados e scripts de gravação, prontos para uso
+    /windows/                 — Scripts .bat (Windows)
+    /linux/                   — Scripts .sh (Linux)
+    /mac/                     — Scripts .command (macOS, duplo-clique direto)
+    /rx/, /tx/                — Arquivos binários (.bin, .uf2) usados pelos scripts acima
+/hardware/                    — Esquemas elétricos e diagramas de ligação
+/docs/                        — Instruções de montagem e este manual
 ```
+
+**Se você só quer usar o projeto** (sem mexer no código), vá direto para `DVS_Wireless_Firmware/` e siga as instruções em [`docs/ASSEMBLY.pdf`](docs/ASSEMBLY.pdf) — não é necessário instalar nenhum ambiente de desenvolvimento.
+
+**Se você quer estudar, modificar ou compilar o firmware do zero**, o código-fonte completo está em `firmware/rx/` e `firmware/tx/` (também detalhado em `docs/ASSEMBLY.pdf`).
 
 ## Créditos
 
