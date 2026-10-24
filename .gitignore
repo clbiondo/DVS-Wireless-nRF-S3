@@ -12,3 +12,4 @@ twister-out/
 .DS_Store
 Thumbs.db
 build_teste_hid/
+build_teste_hid_fake/

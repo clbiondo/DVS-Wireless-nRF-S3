@@ -33,6 +33,9 @@
 #include "dock_pairing.h"
 #include "dock_led.h"
 #include "dock_bridge.h"
+#ifdef DVS_MODO_HID
+#include "usb_hid.h"
+#endif
 
 static const char *TAG = "dvs_rx";
 
@@ -105,6 +108,37 @@ static float deck1_vel_correction = 0.99538f;
 static float deck2_vel_correction = 1.00044f;
 static portMUX_TYPE velocity_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
+#ifdef DVS_MODO_HID
+/* Task que envia o report HID - a radio_task a acorda a cada pacote valido. */
+static TaskHandle_t hid_task_handle = NULL;
+#endif
+
+/* Velocidade atual de um deck em graus/s, ja pronta para uso (CV02 ou HID):
+   le a velocidade bruta do radio sob o spinlock, zera se o ultimo pacote
+   tiver mais de 200ms, e aplica a correcao de calibracao do deck. Nao aplica
+   deadzone (a do CV02 fica dentro de cv02_fill). Se last_pkt_ms_out != NULL,
+   devolve o timestamp do ultimo pacote valido. */
+static float deck_velocity_dps(deck_ctx_t *ctx, uint32_t now_ms, uint32_t *last_pkt_ms_out) {
+    float vel;
+    uint32_t last_ms;
+    taskENTER_CRITICAL(&velocity_spinlock);
+    vel = ctx->raw_velocity;
+    last_ms = ctx->raw_last_pkt_ms;
+    taskEXIT_CRITICAL(&velocity_spinlock);
+    if ((now_ms - last_ms) > 200) {
+        vel = 0.0f;
+    }
+    if (ctx == &deck1) {
+        vel *= deck1_vel_correction;
+    } else if (ctx == &deck2) {
+        vel *= deck2_vel_correction;
+    }
+    if (last_pkt_ms_out) {
+        *last_pkt_ms_out = last_ms;
+    }
+    return vel;
+}
+
 /* ── ISR de GPIO: so envia o ponteiro do deck pra fila, nada de trabalho
    pesado dentro da ISR (boa pratica - handler real roda na task) ── */
 static void IRAM_ATTR gpio_irq_handler(void *arg) {
@@ -157,6 +191,11 @@ static void radio_task(void *arg) {
                     ctx->cv02.current_velocity = pkt.velocity;
                     ctx->cv02.last_pkt_ms = now_ms_radio;
                     taskEXIT_CRITICAL(&velocity_spinlock);
+#ifdef DVS_MODO_HID
+                    if (hid_task_handle) {
+                        xTaskNotifyGive(hid_task_handle);
+                    }
+#endif
                 }
 
                 pkt_count++;
@@ -170,6 +209,7 @@ static void radio_task(void *arg) {
     }
 }
 
+#ifndef DVS_MODO_HID   /* audio/I2S (CV02): fora do build do modo HID */
 /* ── Task de audio: uma por deck, nucleo 1. ── */
 static void audio_task(void *arg) {
     deck_ctx_t *ctx = (deck_ctx_t *)arg;
@@ -180,20 +220,8 @@ static void audio_task(void *arg) {
     while (1) {
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
-        float vel;
         uint32_t last_ms;
-        taskENTER_CRITICAL(&velocity_spinlock);
-        vel = ctx->raw_velocity;
-        last_ms = ctx->raw_last_pkt_ms;
-        taskEXIT_CRITICAL(&velocity_spinlock);
-        if ((now_ms - last_ms) > 200) {
-            vel = 0.0f;
-        }
-        if (ctx == &deck1) {
-            vel *= deck1_vel_correction;
-        } else if (ctx == &deck2) {
-            vel *= deck2_vel_correction;
-        }
+        float vel = deck_velocity_dps(ctx, now_ms, &last_ms);
         ctx->cv02.current_velocity = vel;
         ctx->cv02.last_pkt_ms = last_ms;
         cv02_fill(&ctx->cv02, buf, BLOCK_SAMPLES, now_ms);
@@ -206,7 +234,52 @@ static void audio_task(void *arg) {
         }
     }
 }
+#endif
 
+#ifdef DVS_MODO_HID
+/* ── Task HID (modo HID): manda a velocidade dos 2 decks por USB. ──
+   Acorda a cada pacote valido de qualquer radio (notificacao da radio_task)
+   e, no maximo, a cada HID_KEEPALIVE_MS mesmo sem pacote - o seq continua
+   subindo para o watchdog do mapeamento do Mixxx nao parar os decks. Se o
+   endpoint ainda estiver ocupado com o report anterior, este e descartado:
+   o proximo pacote (ou o keepalive) manda o valor mais novo. */
+#define HID_KEEPALIVE_MS 10   /* = 1 tick com CONFIG_FREERTOS_HZ=100 */
+
+/* O giroscopio do TX da velocidade NEGATIVA com o disco girando para frente
+   (sentido horario, eixo Z para cima). O protocolo HID usa positivo = frente.
+   O CV02 compensa isso na quadratura (cosseno negado em cv02_fill); o HID
+   compensa aqui. */
+#define HID_SENTIDO (-1.0f)
+
+static void hid_task(void *arg) {
+    (void)arg;
+    uint32_t sent = 0, skipped = 0;
+    int64_t last_log_us = 0;
+
+    ESP_LOGI(TAG, "task HID iniciada (radio -> report USB)");
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(HID_KEEPALIVE_MS));
+
+        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        float v1 = HID_SENTIDO * deck_velocity_dps(&deck1, now_ms, NULL);
+        float v2 = HID_SENTIDO * deck_velocity_dps(&deck2, now_ms, NULL);
+        if (usb_hid_send_velocities(v1, v2, 0)) {
+            sent++;
+        } else {
+            skipped++;
+        }
+
+        int64_t now_us = esp_timer_get_time();
+        if (now_us - last_log_us >= 5000000) {
+            last_log_us = now_us;
+            ESP_LOGI(TAG, "HID: mounted=%d enviados=%lu descartados=%lu deck1=%.1f deck2=%.1f dps",
+                     usb_hid_ready(), (unsigned long)sent, (unsigned long)skipped, v1, v2);
+        }
+    }
+}
+#endif
+
+#ifndef DVS_MODO_HID
 static void i2s_setup(deck_ctx_t *ctx, i2s_port_t port, int bck, int lrck, int dout) {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(port, I2S_ROLE_MASTER);
 
@@ -247,6 +320,7 @@ static void i2s_setup(deck_ctx_t *ctx, i2s_port_t port, int bck, int lrck, int d
 
     ESP_ERROR_CHECK(i2s_channel_enable(ctx->i2s_tx));
 }
+#endif
 
 static void deck_setup(deck_ctx_t *ctx, const char *label, uint8_t channel,
                        const uint8_t addr[5], int sck, int mosi, int miso,
@@ -410,7 +484,10 @@ void app_main(void) {
     nvmc_test_run();
     extern void nvmc_flash_test_run(void);
 #endif
+#ifndef DVS_MODO_HID
+    /* No modo HID o PHY USB e do TinyUSB: o bridge (USB-Serial-JTAG) nao sobe. */
     dock_bridge_init();
+#endif
     /* swd_test_run() removida 07/ago - conflitava com GP38/39
        agora usados pela UART propria do dock2 (ver dock_pairing.c) */
 
@@ -433,8 +510,16 @@ void app_main(void) {
 
 
 
+#ifdef DVS_MODO_HID
+    /* Modo HID: sem I2S/audio. A task HID sobe ANTES dos radios para que a
+       primeira notificacao da radio_task ja tenha destino. */
+    ESP_LOGI(TAG, "MODO HID: velocidade dos decks por USB (sem audio/CV02)");
+    ESP_ERROR_CHECK(usb_hid_start());
+    xTaskCreatePinnedToCore(hid_task, "hid", 4096, NULL, 11, &hid_task_handle, 1);
+#else
     i2s_setup(&deck1, I2S_NUM_0, D1_I2S_BCK, D1_I2S_LRCK, D1_I2S_DOUT);
     i2s_setup(&deck2, I2S_NUM_1, D2_I2S_BCK, D2_I2S_LRCK, D2_I2S_DOUT);
+#endif
 
     /* Carregar formato de timecode salvo na NVS */
     uint8_t saved_tc = load_tc_format_from_nvs();
@@ -445,8 +530,10 @@ void app_main(void) {
     xTaskCreatePinnedToCore(radio_task, "radio_deck1", 4096, &deck1, 10, NULL, 0);
     xTaskCreatePinnedToCore(radio_task, "radio_deck2", 4096, &deck2, 10, NULL, 0);
 
+#ifndef DVS_MODO_HID
     xTaskCreatePinnedToCore(audio_task, "audio_deck1", 4096, &deck1, 12, NULL, 1);
     xTaskCreatePinnedToCore(audio_task, "audio_deck2", 4096, &deck2, 12, NULL, 1);
+#endif
 
     ESP_LOGI(TAG, "Todas as tasks criadas. Sistema rodando.");
 }
