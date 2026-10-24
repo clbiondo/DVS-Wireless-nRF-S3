@@ -33,9 +33,7 @@
 #include "dock_pairing.h"
 #include "dock_led.h"
 #include "dock_bridge.h"
-#ifdef DVS_MODO_HID
 #include "usb_hid.h"
-#endif
 
 static const char *TAG = "dvs_rx";
 
@@ -108,10 +106,8 @@ static float deck1_vel_correction = 0.99538f;
 static float deck2_vel_correction = 1.00044f;
 static portMUX_TYPE velocity_spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-#ifdef DVS_MODO_HID
 /* Task que envia o report HID - a radio_task a acorda a cada pacote valido. */
 static TaskHandle_t hid_task_handle = NULL;
-#endif
 
 /* Velocidade atual de um deck em graus/s, ja pronta para uso (CV02 ou HID):
    le a velocidade bruta do radio sob o spinlock, zera se o ultimo pacote
@@ -191,11 +187,9 @@ static void radio_task(void *arg) {
                     ctx->cv02.current_velocity = pkt.velocity;
                     ctx->cv02.last_pkt_ms = now_ms_radio;
                     taskEXIT_CRITICAL(&velocity_spinlock);
-#ifdef DVS_MODO_HID
                     if (hid_task_handle) {
                         xTaskNotifyGive(hid_task_handle);
                     }
-#endif
                 }
 
                 pkt_count++;
@@ -209,7 +203,6 @@ static void radio_task(void *arg) {
     }
 }
 
-#ifndef DVS_MODO_HID   /* audio/I2S (CV02): fora do build do modo HID */
 /* ── Task de audio: uma por deck, nucleo 1. ── */
 static void audio_task(void *arg) {
     deck_ctx_t *ctx = (deck_ctx_t *)arg;
@@ -234,10 +227,8 @@ static void audio_task(void *arg) {
         }
     }
 }
-#endif
 
-#ifdef DVS_MODO_HID
-/* ── Task HID (modo HID): manda a velocidade dos 2 decks por USB. ──
+/* ── Task HID: manda a velocidade dos 2 decks por USB (junto com o CV02). ──
    Acorda a cada pacote valido de qualquer radio (notificacao da radio_task)
    e, no maximo, a cada HID_KEEPALIVE_MS mesmo sem pacote - o seq continua
    subindo para o watchdog do mapeamento do Mixxx nao parar os decks. Se o
@@ -277,9 +268,7 @@ static void hid_task(void *arg) {
         }
     }
 }
-#endif
 
-#ifndef DVS_MODO_HID
 static void i2s_setup(deck_ctx_t *ctx, i2s_port_t port, int bck, int lrck, int dout) {
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(port, I2S_ROLE_MASTER);
 
@@ -320,7 +309,6 @@ static void i2s_setup(deck_ctx_t *ctx, i2s_port_t port, int bck, int lrck, int d
 
     ESP_ERROR_CHECK(i2s_channel_enable(ctx->i2s_tx));
 }
-#endif
 
 static void deck_setup(deck_ctx_t *ctx, const char *label, uint8_t channel,
                        const uint8_t addr[5], int sck, int mosi, int miso,
@@ -484,10 +472,10 @@ void app_main(void) {
     nvmc_test_run();
     extern void nvmc_flash_test_run(void);
 #endif
-#ifndef DVS_MODO_HID
-    /* No modo HID o PHY USB e do TinyUSB: o bridge (USB-Serial-JTAG) nao sobe. */
-    dock_bridge_init();
-#endif
+    /* dock_bridge_init() NAO e chamado: o USB nativo e sempre do TinyUSB (HID),
+       entao o USB-Serial-JTAG que o bridge usa fica desconectado do conector.
+       (O bridge so servia para BRIDGE:1/2 e SENDDOCK:, manutencao do TX pela
+       USB - nao usada; pareamento/canal/formato seguem pelo botao e UART do dock.) */
     /* swd_test_run() removida 07/ago - conflitava com GP38/39
        agora usados pela UART propria do dock2 (ver dock_pairing.c) */
 
@@ -510,16 +498,15 @@ void app_main(void) {
 
 
 
-#ifdef DVS_MODO_HID
-    /* Modo HID: sem I2S/audio. A task HID sobe ANTES dos radios para que a
-       primeira notificacao da radio_task ja tenha destino. */
-    ESP_LOGI(TAG, "MODO HID: velocidade dos decks por USB (sem audio/CV02)");
+    /* CV02 e HID rodam SEMPRE juntos: o CV02 sai pelo I2S (audio) e o HID pelo
+       USB nativo (velocidade). A task HID sobe ANTES dos radios para que a
+       primeira notificacao da radio_task ja tenha destino. Prioridade 11, abaixo
+       da audio_task (12) no mesmo nucleo: o HID nunca atrasa o I2S. */
     ESP_ERROR_CHECK(usb_hid_start());
     xTaskCreatePinnedToCore(hid_task, "hid", 4096, NULL, 11, &hid_task_handle, 1);
-#else
+
     i2s_setup(&deck1, I2S_NUM_0, D1_I2S_BCK, D1_I2S_LRCK, D1_I2S_DOUT);
     i2s_setup(&deck2, I2S_NUM_1, D2_I2S_BCK, D2_I2S_LRCK, D2_I2S_DOUT);
-#endif
 
     /* Carregar formato de timecode salvo na NVS */
     uint8_t saved_tc = load_tc_format_from_nvs();
@@ -530,10 +517,8 @@ void app_main(void) {
     xTaskCreatePinnedToCore(radio_task, "radio_deck1", 4096, &deck1, 10, NULL, 0);
     xTaskCreatePinnedToCore(radio_task, "radio_deck2", 4096, &deck2, 10, NULL, 0);
 
-#ifndef DVS_MODO_HID
     xTaskCreatePinnedToCore(audio_task, "audio_deck1", 4096, &deck1, 12, NULL, 1);
     xTaskCreatePinnedToCore(audio_task, "audio_deck2", 4096, &deck2, 12, NULL, 1);
-#endif
 
     ESP_LOGI(TAG, "Todas as tasks criadas. Sistema rodando.");
 }
