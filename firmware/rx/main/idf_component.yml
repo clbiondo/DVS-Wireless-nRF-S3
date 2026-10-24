@@ -1,0 +1,5 @@
+## Dependencias gerenciadas pelo IDF Component Manager (baixadas em managed_components/).
+dependencies:
+  idf: ">=5.0"
+  # USB device (TinyUSB) no USB-OTG do ESP32-S3: usado pelo modo HID (usb_hid.c).
+  espressif/esp_tinyusb: "~2.4.0"

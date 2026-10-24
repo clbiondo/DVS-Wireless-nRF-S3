@@ -1,0 +1,6 @@
+# Valores aplicados a opcoes que ainda nao existem no sdkconfig (ex.: as do esp_tinyusb).
+# O sdkconfig existente continua valendo para todo o resto.
+
+# Modo HID: 1 interface HID no TinyUSB (usb_hid.c). CDC/MSC ficam desligados (padrao),
+# o que mantem o HID como interface 0.
+CONFIG_TINYUSB_HID_COUNT=1
